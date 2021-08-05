@@ -1,3 +1,10 @@
+'''
+TODO:
+    Needs to record all the data from stuff like this:
+    https://eclipse.pmel.noaa.gov/rudics/POPS/0024/C0024_08_04_2021
+'''
+
+
 import requests
 from lxml import html
 import csv
@@ -13,10 +20,10 @@ stop = 60
 
 latest_date_only = False
 
-
 base_url = 'https://eclipse.pmel.noaa.gov/rudics/POPS/'
 #export_file = 'popup_QC_check.csv'
 now = datetime.now()
+#export_file = 'popup_QC_check ' + now.strftime('%y%m%d') + '.csv'
 export_file = 'popup_QC_check ' + now.strftime('%y%m%d') + '.csv'
 
 start_time = calendar.timegm(time.strptime("20", '%y')) #starts time from January 1, 2020
@@ -35,7 +42,7 @@ class PuF_data:
         self.ID = ID      #popup ID
         self.set = set    #dataset, a date
         self.gps_data = {}
-        self.data = {}
+        self.data = []
 
     def import_GPS(self, dstr):
 
@@ -71,8 +78,12 @@ class PuF_data:
             return str(int('0x' + str(hx), 0))
 
         def pdXX(hx):
-            dec = int('0x' + str(hx), 0)
-            return float(dec)/100
+            # dec = int('0x' + str(hx), 0)
+            # return float(dec)/100
+            value = int('0x' + str(hx), 16)
+            if value & (1 << 15):
+                value -= 1 << 16
+            return value/100
 
         def pXX(hx):
             dec = int('0x' + str(hx), 0)
@@ -105,18 +116,24 @@ class PuF_data:
 
         d_units = dstr[:-2].split(',')
         loc_list = list(data_locs.keys())
+        temp = {}
 
         for n in range(len(loc_list)):
 
             loc = loc_list[n]
 
             try:
-                self.data[loc] = data_decoding[loc](d_units[n])
+                #self.data[loc] = data_decoding[loc](d_units[n])
+                temp[loc] = data_decoding[loc](d_units[n])
             except:
                 KeyError
-                self.data[loc] = ''
+                #self.data[loc] = ''
+                temp[loc] = ''
 
-        return self.data
+            self.data.append(temp)
+
+        return temp
+
 
 def gen_url(base, start, stop):
 
@@ -151,47 +168,51 @@ if __name__ == '__main__':
     raw = {}
     for_export = []
     for_export_latest = []
+    #set_n = 1
 
     for set in set_names:
 
-        if '.' in set:
-            continue
+        #set = set + '_' + str(set_n).zfill(4)
+        #set_n = set_n + 1
 
         r = requests.get(datasets[set])
         content = str(r.content).split('\\n')
 
         raw[set] = PuF_data(set[:4], set)
+        data_keys = {}
 
         for n in range(len(content)):
 
-            line = content[n]
+            line = content[n].split(',')
 
-            # extract and decode GPS data
-            if "GPS" in line:
-                raw[set].import_GPS(content[n + 2])
-
+            if len(line[0]) == 20:
+                raw[set].import_GPS(content[n])
+            elif len(line[0]) == 8:
             # extract and decode other popup data
-            if 'POPS' in line:
-                raw[set].import_data(content[n + 2])
+                raw[set].import_data(content[n])
+            else:
+                continue
+
+        for data_set in list(raw[set].data):
 
             temp = [set[:4], set[4:]]
             err_col = ''
 
-        for col in list(raw[set].data.keys()):
+            for col in list(data_set.keys()):
 
-            try:
-                in_range = err_range[col]['low'] < float(raw[set].data[col]) < err_range[col]['up']
-            except:
-                ValueError
-                err_col = err_col + ", " + col
+                try:
+                    in_range = err_range[col]['low'] < float(data_set[col]) < err_range[col]['up']
+                except:
+                    ValueError
+                    in_range = False
 
-            if not in_range:
-                err_col = err_col + ", " + col
+                if not in_range:
+                    err_col = err_col + ", " + col
 
-            temp.append(raw[set].data[col])
-        temp.append(err_col)
+                temp.append(data_set[col])
+            temp.append(err_col)
 
-        for_export.append(temp)
+            for_export.append(temp)
 
     last_line = []
 
