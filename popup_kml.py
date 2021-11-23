@@ -7,11 +7,9 @@ TODO:
 import requests
 from lxml import html
 import simplekml
-import pprint
 import datetime
 import pandas as pd
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 import numpy as np
 
 def gen_urls(base):
@@ -130,10 +128,6 @@ def gen_kml(data, path):
     lat0 = None
     lon0 = None
 
-    #colorBase = data['P0'].max() - data['P0'].min()
-
-    #colors = gen_gradient()
-
     for row in data.itertuples():
 
         if int(row[-1]) == 0:
@@ -215,8 +209,6 @@ if __name__ == "__main__":
     gps_df.drop(gps_df[gps_df['LAT'] < 4500].index, inplace=True, axis='rows')
     gps_df.drop(gps_df[gps_df['LON'] < 16000].index, inplace=True, axis='rows')
 
-
-    #gps_df.drop(labels=['DT', 'ID', 'S', 'H', 'M', 'T', 'LATD', 'LOND', 'Q'], axis='columns', inplace=True)
     temp_df = pd.DataFrame(temp).transpose()
     temp_df.columns = ['P0', 'P1']
 
@@ -233,43 +225,5 @@ if __name__ == "__main__":
     master['P0N'] = (master['P0']-master['P0'].min())/(master['P0'].max() - master['P0'].min())
     master['no'] = list(range(0, len(master)))
 
-    '''
-    Need to generate a mean of temperature
-    Drop outliers
-    Fit to color gradient
-    '''
-
-    #breakpoint()
-
-    #pprint.pprint(temp)
     gen_kml(master, path)
 
-
-# def gen_kml(data, path):
-#     '''
-#     Takes a dict with data and write lat and lon into a .kml file
-#     :param data: dict, with date as the key
-#     :param path: output file path for the .kml file
-#     :return:
-#     '''
-#
-#     kml = simplekml.Kml()
-#     sharedstyle = simplekml.Style()
-#     sharedstyle.linestyle.width = 10
-#
-#     coordate = list(data.keys())
-#
-#     colors = gen_gradient(len(coordate))
-#
-#     for rowN in range(1, len(coordate)):
-#
-#         tN = coordate[rowN]
-#         tNm1 = coordate[rowN-1]
-#
-#         ln = kml.newlinestring(name=tN,
-#                           coords=[(float(data[tNm1][5])/-100, float(data[tNm1][3])/100), (float(data[tN][5])/-100, float(data[tN][3])/100)],
-#                           altitudemode=simplekml.AltitudeMode.relativetoground)
-#         ln.style.linestyle.color = colors[rowN]
-#
-#
-#     kml.save(path + 'test.kml')
