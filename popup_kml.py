@@ -1,6 +1,6 @@
 '''
 TODO:
-    Labels?
+
 '''
 
 
@@ -50,6 +50,13 @@ def pXX(hx):
 
 
 def colorFader(c1, c2, mix=0):
+    '''
+    :param c1: Starting color for gradient
+    :param c2: Ending color for gradient
+    :param mix: Float between 0-1, where the data sits on the gradient
+    :return:
+    '''
+
     c1 = np.array(mpl.colors.to_rgb(c1))
     c2 = np.array(mpl.colors.to_rgb(c2))
 
@@ -80,6 +87,7 @@ def get_rudics_data(url):
         content = str(r.content).split('%%')
 
         for sect in content:
+            # Individual sections (ie 'GPS' or 'POPS') have to be added by hand.
 
             if 'GPS' in sect:
 
@@ -105,16 +113,19 @@ def get_rudics_data(url):
     return gps_data, temp_data
 
 
-def gen_kml(data, path, plotcol):
+def gen_kml(data, path):
     '''
     Takes a dict with data and write lat and lon into a .kml file
+    Currently columns are magic numbers, hardcoded in here. Might need to change if this
     :param data: dataframe, with date as the index
     :param path: output file path for the .kml file
-    :param plotcol: data column that will act as the guide for our color gradient
     :return:
     '''
 
     kml = simplekml.Kml()
+
+    points = kml.newfolder(name='Points')
+    lines = kml.newfolder(name='Color Line')
 
     lat0 = None
     lon0 = None
@@ -128,16 +139,17 @@ def gen_kml(data, path, plotcol):
         if int(row[-1]) == 0:
             lat0 = row[1]
             lon0 = row[2]
+            timestamp = row[0]
             continue
 
-        ln = kml.newlinestring(name=row[-1],
-                          #coords=[(float(data[tNm1][5])/-100, float(data[tNm1][3])/100), (float(data[tN][5])/-100, float(data[tN][3])/100)],
+        ln = lines.newlinestring(name=row[-1],
                           coords=[(lon0 / -100, lat0 / 100),
                                   (row[2] / -100, row[1] / 100)],
                           altitudemode=simplekml.AltitudeMode.relativetoground)
 
-        #ln.style = sharedstyle
         ln.linestyle.width = 3
+        ln.timespan.begin = timestamp.isoformat() + 'Z'
+        ln.timespan.end = row[0].isoformat() + 'Z'
 
         try:
              #cf = colorFader('blue', 'red', row[-3] / colorBase)
@@ -151,13 +163,32 @@ def gen_kml(data, path, plotcol):
 
         ln.style.linestyle.color = 'ff' + cf[5:7] + cf[3:5] + cf[1:3]
 
+        name = str(row[-4])[:7] + '°'
+
+        pnt = points.newpoint(name=name,
+                           coords=[(row[2] / -100, row[1] / 100)]
+                           )
+
+        pnt.timestamp.when = row[0].isoformat() + 'Z'
+
+        pnt.style.labelstyle.color = 'ff' + cf[5:7] + cf[3:5] + cf[1:3]
+        pnt.style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png'
+
         lat0 = row[1]
         lon0 = row[2]
+        timestamp = row[0]
 
     kml.save(path + 'test.kml')
 
 
 def date_inner_limits(set1, set2):
+    '''
+    Returns a date range where two data sets overlap
+    :param set1:
+    :param set2:
+    :return: Start and end dates
+    '''
+
 
     if set1.index[0] < set2.index[0]:
         start_date = set2.index[0]
@@ -211,7 +242,7 @@ if __name__ == "__main__":
     #breakpoint()
 
     #pprint.pprint(temp)
-    gen_kml(master, path, -2)
+    gen_kml(master, path)
 
 
 # def gen_kml(data, path):
