@@ -9,6 +9,7 @@ from lxml import html
 import simplekml
 import datetime
 import pandas as pd
+import openpyxl
 import matplotlib as mpl
 import numpy as np
 
@@ -47,7 +48,7 @@ def pXX(hx):
 
     val = int('0x' + str(hx), 16)
 
-    if val & (1 << (16-1)):
+    if val & (1 << (16 - 1)):
         val -= 1 << 16
 
     return float(val) / 1000
@@ -180,7 +181,7 @@ def gen_kml(data, path):
         lon0 = row[2]
         timestamp = row[0]
 
-    kml.save(path + 'test.kml')
+    kml.save(path)
 
 
 def date_inner_limits(set1, set2):
@@ -206,32 +207,49 @@ def date_inner_limits(set1, set2):
 
 if __name__ == "__main__":
 
-    url = "http://eclipse.pmel.noaa.gov/rudics/POPS/0009/"
-    path = 'D:\Data\PopUps\Snail trails\\'
+    base_url = "http://eclipse.pmel.noaa.gov/rudics/POPS/"
+    base_path = 'D:\Data\PopUps\Snail trails\\Decimated\\'
+    date_path = 'D:\Data\PopUps\Snail trails\stats.xlsx'
 
-    gps, temp = get_rudics_data(url)
+    stats = {}
 
-    gps_df = pd.DataFrame(gps).transpose()
-    gps_df.columns = ['DT', 'ID', 'T', 'LAT', 'LATD', 'LON', 'LOND', 'Q', 'S', 'H', 'M']
-    gps_df = gps_df[['LAT', 'LON']].astype('float64')
-    gps_df.drop(gps_df[gps_df['LAT'] < 4500].index, inplace=True, axis='rows')
-    gps_df.drop(gps_df[gps_df['LON'] < 16000].index, inplace=True, axis='rows')
+    for n in range(1, 13):
 
-    temp_df = pd.DataFrame(temp).transpose()
-    temp_df.columns = ['P0', 'P1']
+        url = base_url + str(n).zfill(4)
+        path = base_path + 'POP' + str(n).zfill(4) + '.kml'
 
-    master = pd.concat([gps_df[['LAT', 'LON']], temp_df[['P0', 'P1']]], axis=1, sort=True)
+        print('POP' + str(n).zfill(4))
 
-    start_date, end_date = date_inner_limits(gps_df, temp_df)
+        gps, temp = get_rudics_data(url)
 
-    master = master[master.index > start_date]
-    master = master[master.index < end_date]
-    master = master.astype('float64')
-    master.interpolate(method='time', inplace=True)
-    master.dropna(inplace=True)
-    master['PM'] = master[['P0', 'P1']].mean(axis='columns')
-    master['P0N'] = (master['P0']-master['P0'].min())/(master['P0'].max() - master['P0'].min())
-    master['no'] = list(range(0, len(master)))
+        gps_df = pd.DataFrame(gps).transpose()
+        gps_df.columns = ['DT', 'ID', 'T', 'LAT', 'LATD', 'LON', 'LOND', 'Q', 'S', 'H', 'M']
+        gps_df = gps_df[['LAT', 'LON']].astype('float64')
+        #gps_df.drop(gps_df[gps_df['LAT'] < 4500].index, inplace=True, axis='rows')
+        gps_df.drop(gps_df[gps_df['LON'] < 14000].index, inplace=True, axis='rows')
+        gps_df.drop(gps_df[gps_df.index > datetime.datetime.today()].index, inplace=True)
 
-    #gen_kml(master, path)
+        temp_df = pd.DataFrame(temp).transpose()
+        temp_df.drop(temp_df[temp_df.index > datetime.datetime.today()].index, inplace=True)
+        temp_df.columns = ['P0', 'P1']
 
+        master = pd.concat([gps_df[['LAT', 'LON']], temp_df[['P0', 'P1']]], axis=1, sort=True)
+
+        start_date, end_date = date_inner_limits(gps_df, temp_df)
+        stats[n] = {'start': start_date,
+                    'end':   end_date,
+                    'time':  (end_date - start_date).days}
+
+        master = master[master.index > start_date]
+        master = master[master.index < end_date]
+        master = master.astype('float64')
+        master.interpolate(method='time', inplace=True)
+        master.dropna(inplace=True)
+        master['PM'] = master[['P0', 'P1']].mean(axis='columns')
+        master['P0N'] = (master['P0']-master['P0'].min())/(master['P0'].max() - master['P0'].min())
+        master['no'] = list(range(0, len(master)))
+
+        gen_kml(master.iloc[::10, :], path)
+
+    dfs = pd.DataFrame(stats).transpose()
+    dfs.to_excel(date_path)
